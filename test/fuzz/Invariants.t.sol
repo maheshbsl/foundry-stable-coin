@@ -60,6 +60,7 @@ contract OpenInvariantsTest is StdInvariant, Test {
         uint256 totalCollateralValueInUsd = wethValue + wbtcValue;
         console.log("dsc supply: ", totalSupply);
         console.log("total collateral value: ", totalCollateralValueInUsd);
+        console.log("time mint is called: ", handler.timeMintIsCalled());
 
         // assert that total supply of dsc is less than the total value of collateral
         assert(totalSupply <= totalCollateralValueInUsd);

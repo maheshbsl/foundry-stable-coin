@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.27;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {DSCEngine} from "src/DSCEngine.sol";
 import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
 import {DeployDSC} from "script/DeployDSC.s.sol";
@@ -473,5 +473,65 @@ contract DSCEngineTest is Test {
         uint256 amountDscToBurn = 100e18;
         dsc.approve(address(dscEngine), amountDscToBurn);
         dscEngine.redeemCollateralForDsc(weth, amountCollateralToRedeem, amountDscToBurn);
+    }
+
+    
+    // test liquidation doesn't affect  the hf of the liquidator
+
+    function testLiquidationImprovesLiquidtorHF() public {
+        // Arrange: user deposit collateral and mint dsc
+        vm.startPrank(user);
+        uint256 amountCollateral = 1 ether; // $2000 (1 WETH = 2000 usd)
+        uint256 amountDscToMint = 1000 ether; 
+        ERC20Mock(weth).mint(user, amountCollateral);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+
+        dscEngine.depositCollateral(weth, amountCollateral);
+        dscEngine.mintDSC(amountDscToMint); // 1000 dsc 
+        vm.stopPrank();
+
+       // hf = 2000 * 0.5 / 1000 =  1
+
+        // set up the liquidator : deposit collateral and mint dsc
+        address liquidator = makeAddr("liquidator");
+        vm.startPrank(liquidator);
+        uint256 liquidatorCollateral = 1 ether; // $ 2000
+        uint256 liquidatorDsc = 1000 ether; 
+        ERC20Mock(weth).mint(liquidator, liquidatorCollateral);
+        ERC20Mock(weth).approve(address(dscEngine), liquidatorCollateral);
+       
+        dscEngine.depositCollateral(weth, liquidatorCollateral);
+        dscEngine.mintDSC(liquidatorDsc); 
+        vm.stopPrank();
+        
+         // hf = 2000 * 0.5 / 1000 =  1
+         
+        // drop weth price to make user undercollateralized 
+        int256 newPrice = 1300e8; // (1 weth = $1300)
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(newPrice);
+
+        /// verify both are undercollateralized
+        uint256 userHf = dscEngine.getHealthFactor(user);
+        uint256 liquidatorHfBeforeLiquidation = dscEngine.getHealthFactor(liquidator);
+
+        console.log("User health factor:", userHf);
+        console.log("Liquidator health factor before:", liquidatorHfBeforeLiquidation);
+
+        assertLt(userHf, 1e18);
+        assertLt(liquidatorHfBeforeLiquidation, 1e18);
+
+        // liquidator liquidate 200 dsc of user's debt
+        vm.startPrank(liquidator);
+        uint256 debtToCover = 200 ether;
+        dsc.approve(address(dscEngine), debtToCover);
+        dscEngine.liquidate(weth, user, debtToCover);
+        vm.stopPrank();
+
+        // Assert : liquidation doesn't affect the liquidator
+        uint256 liquidatorHfAfterLiquidation = dscEngine.getHealthFactor(liquidator);
+        console.log("Liquidator health factor after:", liquidatorHfAfterLiquidation);
+        console.log("Same:", liquidatorHfAfterLiquidation == liquidatorHfBeforeLiquidation);
+        
+        assertEq(liquidatorHfAfterLiquidation, liquidatorHfBeforeLiquidation);
     }
 }

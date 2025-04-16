@@ -36,7 +36,6 @@ contract Handler is Test {
 
     // deposit collateral
     function depositCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
-
         ERC20Mock collateralToken = _getCollateralTokenFromSeed(collateralSeed);
         amountCollateral = bound(amountCollateral, 1, MAX_DEPOSIT_SIZE);
 
@@ -51,25 +50,24 @@ contract Handler is Test {
 
     // mint dsc
     function mintDsc(uint256 amount) public {
-        
         amount = bound(amount, 1, MAX_DEPOSIT_SIZE);
         (uint256 totalDscMinted, uint256 totalCollateralValueInUsd) = dscEngine.getUserInformation(msg.sender);
 
-        int256 maxDscToMint =  ((int256(totalCollateralValueInUsd) / 2 ) - int256(totalDscMinted));
+        int256 maxDscToMint = ((int256(totalCollateralValueInUsd) / 2) - int256(totalDscMinted));
         if (maxDscToMint <= 0) {
             return;
-        } 
-        
+        }
+
         // Make sure maxDscToMint is at least 1 to avoid "Max is less than min" error
         if (uint256(maxDscToMint) < 1) {
             return;
         }
-        
+
         amount = bound(amount, 1, uint256(maxDscToMint));
         if (amount == 0) {
             return;
         }
-        
+
         vm.startPrank(msg.sender);
         dscEngine.mintDSC(amount);
         vm.stopPrank();
@@ -84,40 +82,41 @@ contract Handler is Test {
         if (maxCollateralToRedeem == 0) {
             return;
         }
-        
+
         // Check if the user has any DSC minted
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = dscEngine.getUserInformation(msg.sender);
-        
+
         // If user has DSC, we need to be careful about how much collateral to redeem
         if (totalDscMinted > 0) {
             // Calculate the minimum collateral needed for health factor (with 2x safety margin)
             uint256 minCollateralValueNeeded = totalDscMinted * 2; // 150% collateralization with safety margin
-            
+
             // If we can't redeem any safely, just return
             if (collateralValueInUsd <= minCollateralValueNeeded) {
                 return;
             }
-            
+
             // Calculate max collateral we can redeem while maintaining health factor
             uint256 maxCollateralValueToRedeem = collateralValueInUsd - minCollateralValueNeeded;
-            
+
             // Use getTokenAmountFromUsd for precision
-            uint256 maxTokensToRedeem = dscEngine.getTokenAmountFromUsd(address(collateralToken), maxCollateralValueToRedeem);
-            
+            uint256 maxTokensToRedeem =
+                dscEngine.getTokenAmountFromUsd(address(collateralToken), maxCollateralValueToRedeem);
+
             // Ensure we don't try to redeem more than available
             if (maxTokensToRedeem == 0) {
                 return;
             }
-            
+
             // Cap at the actual amount of collateral the user has
             maxTokensToRedeem = maxTokensToRedeem > maxCollateralToRedeem ? maxCollateralToRedeem : maxTokensToRedeem;
-            
+
             amountCollateral = bound(amountCollateral, 1, maxTokensToRedeem);
         } else {
             // If no DSC minted, we can redeem any amount up to max
             amountCollateral = bound(amountCollateral, 1, maxCollateralToRedeem);
         }
-        
+
         vm.startPrank(msg.sender);
         dscEngine.redeemCollateral(address(collateralToken), amountCollateral);
         vm.stopPrank();

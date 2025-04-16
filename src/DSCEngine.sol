@@ -269,9 +269,6 @@ contract DSCEngine is ReentrancyGuard {
         uint256 endingUserHealthFactor = _healthFactor(user);
         // if liquidating doesn't improve the health factor reverts
         require(endingUserHealthFactor > startingUserHealthFactor, DSCEngine__HealthFactorNotImproved());
-
-        // we will reverts if the liquidator's health factor is broken by this process
-        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -384,8 +381,11 @@ contract DSCEngine is ReentrancyGuard {
         return s_allowedTokens;
     }
 
-    function getUserInformation(address user) public view returns (uint256 totalDscMinted, uint256 totalCollateralValueInUsd) {
+    function getUserInformation(address user)
+        public
+        view
+        returns (uint256 totalDscMinted, uint256 totalCollateralValueInUsd)
+    {
         return _getAccountInformation(user);
     }
-
 }
